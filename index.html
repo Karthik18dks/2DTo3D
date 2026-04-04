@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DEPTH.AI — Image to 3D (Free)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #060608; --surface: #0e0e12; --card: #13131a; --border: #22222e;
+      --accent: #00ffc8; --accent2: #7b5cfa; --text: #e8e8f0; --muted: #5a5a72;
+      --danger: #ff4566;
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+      --font-body: 'DM Sans', sans-serif;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px; opacity: 0.35; pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: ''; position: fixed; top: -40%; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 600px;
+      background: radial-gradient(ellipse at center, rgba(123,92,250,0.12) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    .wrapper { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px; border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px); background: rgba(6,6,8,0.7);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-family: var(--font-display); font-size: 28px; letter-spacing: 3px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .logo span { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--muted); -webkit-text-fill-color: var(--muted); display: block; margin-top: -4px; }
+    .header-badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; color: #00ffc8; border: 1px solid rgba(0,255,200,0.3); padding: 4px 12px; text-transform: uppercase; }
+    .free-badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; color: #ffd700; border: 1px solid rgba(255,215,0,0.3); padding: 4px 12px; text-transform: uppercase; }
+    .hero { text-align: center; padding: 60px 20px 32px; animation: fadeUp 0.8s ease both; }
+    .hero-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 16px; opacity: 0.8; }
+    .hero h1 { font-family: var(--font-display); font-size: clamp(56px, 10vw, 110px); line-height: 0.9; letter-spacing: 2px; background: linear-gradient(160deg, #ffffff 30%, #8888aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
+    .hero p { font-size: 16px; color: var(--muted); max-width: 480px; margin: 0 auto; line-height: 1.7; font-weight: 300; }
+    .free-note { display: inline-block; margin-top: 14px; font-family: var(--font-mono); font-size: 11px; color: #ffd700; background: rgba(255,215,0,0.07); border: 1px solid rgba(255,215,0,0.2); padding: 6px 16px; letter-spacing: 1px; }
+    .main-panel { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1100px; width: 100%; margin: 0 auto; padding: 0 24px 60px; animation: fadeUp 0.9s ease 0.1s both; }
+    @media (max-width: 768px) { .main-panel { grid-template-columns: 1fr; } header { padding: 16px 20px; } }
+    .card { background: var(--card); border: 1px solid var(--border); padding: 28px; position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent2), var(--accent)); opacity: 0; transition: opacity 0.3s; }
+    .card:hover::before { opacity: 1; }
+    .card-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .card-label::before { content: ''; display: block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+    .upload-zone { border: 1.5px dashed var(--border); padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.3s; position: relative; background: rgba(255,255,255,0.01); }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: rgba(0,255,200,0.03); }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon { width: 52px; height: 52px; margin: 0 auto 16px; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 22px; transition: all 0.3s; }
+    .upload-zone:hover .upload-icon { border-color: var(--accent); box-shadow: 0 0 20px rgba(0,255,200,0.15); }
+    .upload-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .upload-sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    .image-preview { display: none; margin-top: 20px; position: relative; }
+    .image-preview img { width: 100%; max-height: 240px; object-fit: contain; border: 1px solid var(--border); background: #0a0a0f; }
+    .image-preview .remove-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,69,102,0.85); border: none; color: white; width: 26px; height: 26px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    .convert-btn { width: 100%; margin-top: 24px; padding: 16px; background: linear-gradient(135deg, var(--accent2), var(--accent)); border: none; color: #000; font-family: var(--font-display); font-size: 20px; letter-spacing: 3px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
+    .convert-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(123,92,250,0.4); }
+    .convert-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .convert-btn .btn-shine { position: absolute; top: 0; left: -100%; width: 60%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent); transition: left 0.5s; }
+    .convert-btn:hover .btn-shine { left: 150%; }
+    .status-log { margin-top: 16px; background: var(--surface); border: 1px solid var(--border); padding: 14px; font-family: var(--font-mono); font-size: 11px; min-height: 64px; max-height: 140px; overflow-y: auto; display: none; }
+    .log-line { padding: 2px 0; display: flex; gap: 10px; }
+    .log-time { color: var(--muted); flex-shrink: 0; }
+    .log-msg { color: var(--accent); }
+    .log-msg.error { color: var(--danger); }
+    .log-msg.success { color: #00ffc8; }
+    .log-msg.warn { color: #ffd700; }
+    .viewer-card { display: flex; flex-direction: column; }
+    .viewer-container { flex: 1; min-height: 360px; background: #08080d; border: 1px solid var(--border); position: relative; overflow: hidden; }
+    #three-canvas { width: 100%; height: 100%; display: block; }
+    .viewer-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
+    .viewer-placeholder .ph-icon { font-size: 48px; opacity: 0.2; }
+    .viewer-placeholder p { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; opacity: 0.4; text-transform: uppercase; }
+    .progress-wrap { margin-top: 16px; display: none; }
+    .progress-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .progress-track { width: 100%; height: 3px; background: var(--border); overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); width: 0%; transition: width 0.4s ease; }
+    .progress-fill.indeterminate { width: 40%; animation: indeterminate 1.4s ease infinite; }
+    @keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+    .download-btn { display: none; width: 100%; margin-top: 16px; padding: 14px; background: transparent; border: 1.5px solid var(--accent); color: var(--accent); font-family: var(--font-display); font-size: 18px; letter-spacing: 3px; cursor: pointer; transition: all 0.3s; text-align: center; text-decoration: none; }
+    .download-btn:hover { background: rgba(0,255,200,0.08); box-shadow: 0 0 20px rgba(0,255,200,0.15); }
+    .viewer-hint { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 8px; text-align: center; letter-spacing: 1px; }
+    .steps-row { max-width: 1100px; margin: 0 auto 40px; padding: 0 24px; display: flex; animation: fadeUp 0.9s ease 0.2s both; }
+    .step { flex: 1; padding: 20px 24px; border: 1px solid var(--border); border-right: none; }
+    .step:last-child { border-right: 1px solid var(--border); }
+    .step-num { font-family: var(--font-display); font-size: 40px; color: var(--border); line-height: 1; margin-bottom: 8px; }
+    .step-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .step-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    @media (max-width: 600px) { .steps-row { flex-direction: column; } .step { border-right: 1px solid var(--border); border-bottom: none; } .step:last-child { border-bottom: 1px solid var(--border); } }
+    footer { text-align: center; padding: 24px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; z-index: 1; position: relative; }
+    footer a { color: var(--accent2); text-decoration: none; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(0,255,200,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--accent); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 12px 20px; z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.3s; max-width: 320px; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { border-color: var(--danger); }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <header>
+    <div class="logo">DEPTH.AI<span>IMAGE → 3D CONVERTER</span></div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <div class="free-badge">✦ 100% FREE</div>
+      <div class="header-badge">TRELLIS AI</div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-tag">// open source · no api key · no cost · no limits</div>
+    <h1>IMAGE<br>TO 3D</h1>
+    <p>Upload any image. Microsoft's TRELLIS AI reconstructs it into a downloadable GLB 3D model — completely free, no account needed.</p>
+    <div class="free-note">✦ Powered by HuggingFace Spaces — 100% free, no API key required</div>
+  </section>
+
+  <div class="steps-row">
+    <div class="step"><div class="step-num">01</div><div class="step-title">Upload Image</div><div class="step-desc">Drop any PNG or JPG. Works best with a clear, isolated object.</div></div>
+    <div class="step"><div class="step-num">02</div><div class="step-title">Click Convert</div><div class="step-desc">No signup, no API key. Completely free forever.</div></div>
+    <div class="step"><div class="step-num">03</div><div class="step-title">Wait ~60s</div><div class="step-desc">TRELLIS AI generates a textured 3D mesh from your image.</div></div>
+    <div class="step"><div class="step-num">04</div><div class="step-title">Download GLB</div><div class="step-desc">Preview in browser, then save your 3D file.</div></div>
+  </div>
+
+  <div class="main-panel">
+    <!-- LEFT -->
+    <div class="card">
+      <div class="card-label">Input</div>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/jpg,image/webp" />
+        <div class="upload-icon">⬆</div>
+        <div class="upload-title">Drop image here</div>
+        <div class="upload-sub">PNG · JPG · WEBP — max 10MB</div>
+      </div>
+      <div class="image-preview" id="imagePreview">
+        <img id="previewImg" src="" alt="Preview" />
+        <button class="remove-btn" id="removeBtn">✕</button>
+      </div>
+      <button class="convert-btn" id="convertBtn" disabled>
+        <span class="btn-shine"></span>CONVERT TO 3D — FREE
+      </button>
+      <div class="status-log" id="statusLog"></div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card viewer-card">
+      <div class="card-label">3D Preview</div>
+      <div class="viewer-container" id="viewerContainer">
+        <canvas id="three-canvas"></canvas>
+        <div class="viewer-placeholder" id="viewerPlaceholder">
+          <div class="ph-icon">◈</div>
+          <p>Your 3D model will appear here</p>
+        </div>
+      </div>
+      <div class="viewer-hint">DRAG TO ROTATE · SCROLL TO ZOOM · RIGHT-DRAG TO PAN</div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-label"><span id="progressText">Processing...</span><span id="progressPct">—</span></div>
+        <div class="progress-track"><div class="progress-fill indeterminate" id="progressFill"></div></div>
+      </div>
+      <a class="download-btn" id="downloadBtn" href="#" download="model.glb">↓ DOWNLOAD GLB</a>
+    </div>
+  </div>
+
+  <footer>DEPTH.AI · Powered by <a href="https://github.com/microsoft/TRELLIS" target="_blank">Microsoft TRELLIS</a> via <a href="https://huggingface.co/spaces/JeffreyXiang/TRELLIS" target="_blank">HuggingFace Spaces</a> · Completely free · No API key needed</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let selectedFile = null;
+
+const fileInput         = document.getElementById('fileInput');
+const uploadZone        = document.getElementById('uploadZone');
+const imagePreview      = document.getElementById('imagePreview');
+const previewImg        = document.getElementById('previewImg');
+const removeBtn         = document.getElementById('removeBtn');
+const convertBtn        = document.getElementById('convertBtn');
+const statusLog         = document.getElementById('statusLog');
+const progressWrap      = document.getElementById('progressWrap');
+const progressFill      = document.getElementById('progressFill');
+const progressText      = document.getElementById('progressText');
+const progressPct       = document.getElementById('progressPct');
+const downloadBtn       = document.getElementById('downloadBtn');
+const viewerPlaceholder = document.getElementById('viewerPlaceholder');
+const toast             = document.getElementById('toast');
+
+// ── UPLOAD ───────────────────────────────────────────────
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+removeBtn.addEventListener('click', () => { selectedFile = null; fileInput.value = ''; imagePreview.style.display = 'none'; convertBtn.disabled = true; });
+
+function handleFile(file) {
+  if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10MB)', true); return; }
+  if (!file.type.startsWith('image/')) { showToast('Please upload an image file', true); return; }
+  selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = e => { previewImg.src = e.target.result; imagePreview.style.display = 'block'; };
+  reader.readAsDataURL(file);
+  convertBtn.disabled = false;
+}
+
+// ── LOG ──────────────────────────────────────────────────
+function log(msg, type = '') {
+  statusLog.style.display = 'block';
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  const t = new Date().toTimeString().slice(0, 8);
+  line.innerHTML = `<span class="log-time">[${t}]</span><span class="log-msg ${type}">${msg}</span>`;
+  statusLog.appendChild(line);
+  statusLog.scrollTop = statusLog.scrollHeight;
+}
+function showToast(msg, isError = false) {
+  toast.textContent = msg;
+  toast.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { toast.className = 'toast'; }, 4500);
+}
+
+// ── PROXY CALL ────────────────────────────────────────────
+async function proxyCall(action, data) {
+  const resp = await fetch('/api/proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, data })
+  });
+  const text = await resp.text();
+  try {
+    const json = JSON.parse(text);
+    if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
+    return json;
+  } catch(e) {
+    throw new Error(`Proxy error (${resp.status}): ${text.slice(0, 120)}`);
+  }
+}
+
+// ── CONVERT ──────────────────────────────────────────────
+convertBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  convertBtn.disabled = true;
+  convertBtn.innerHTML = '<span class="spinner"></span> PROCESSING...';
+  downloadBtn.style.display = 'none';
+  progressWrap.style.display = 'block';
+  progressFill.className = 'progress-fill indeterminate';
+  progressFill.style.background = '';
+  progressText.textContent = 'Uploading image...';
+  progressPct.textContent = '—';
+  statusLog.innerHTML = '';
+
+  try {
+    // Step 1: Read image as base64
+    log('Reading image...');
+    const base64 = await toBase64(selectedFile);
+
+    // Step 2: Upload to HuggingFace
+    log('Uploading to HuggingFace TRELLIS...');
+    const uploadResult = await proxyCall('upload', {
+      imageBase64: base64,
+      mimeType: selectedFile.type
+    });
+    log(`Image uploaded: ${uploadResult.path}`);
+
+    // Step 3: Start prediction
+    log('Starting 3D generation (FREE via TRELLIS)...');
+    progressText.textContent = 'Generating 3D mesh...';
+    const predictResult = await proxyCall('predict', {
+      imagePath: uploadResult.path
+    });
+    const sessionHash = predictResult.session_hash || predictResult.event_id;
+    log(`Session: ${sessionHash}`);
+    log('Waiting for result... (~60-120 seconds)', 'warn');
+
+    // Step 4: Poll for completion
+    const modelReady = await pollForCompletion(sessionHash);
+    log('3D generation complete!', 'success');
+
+    // Step 5: Extract GLB
+    log('Extracting GLB file...');
+    progressText.textContent = 'Extracting GLB...';
+    const extractResult = await proxyCall('extract', { sessionHash });
+    log('GLB extraction started...');
+    const glbUrl = await pollForGLB(extractResult.session_hash || sessionHash);
+
+    // Step 6: Load into viewer
+    log('Loading model into viewer...', 'success');
+    progressText.textContent = 'Loading...';
+    progressFill.className = 'progress-fill';
+    progressFill.style.width = '90%';
+
+    await load3DModel(glbUrl);
+
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Done!';
+    progressPct.textContent = '✓';
+    downloadBtn.href = glbUrl;
+    downloadBtn.style.display = 'block';
+    log('✓ 3D model ready!', 'success');
+    showToast('3D model generated successfully — for free!');
+
+  } catch (err) {
+    log(`Error: ${err.message}`, 'error');
+    showToast(err.message, true);
+    progressText.textContent = 'Failed';
+    progressFill.style.background = 'var(--danger)';
+    progressFill.className = 'progress-fill';
+    progressFill.style.width = '100%';
+  } finally {
+    convertBtn.disabled = false;
+    convertBtn.innerHTML = '<span class="btn-shine"></span>CONVERT TO 3D — FREE';
+    if (selectedFile) convertBtn.disabled = false;
+  }
+});
+
+async function pollForCompletion(sessionHash) {
+  for (let i = 0; i < 80; i++) {
+    await sleep(3000);
+    try {
+      const data = await proxyCall('poll', { sessionHash });
+      if (data.msg === 'process_completed') return data;
+      if (data.msg === 'queue_full') throw new Error('HuggingFace queue is full, try again in a moment');
+      if (i % 5 === 0) log(`Still generating... (${Math.round(i * 3)}s)`);
+    } catch(e) {
+      if (e.message.includes('queue')) throw e;
+    }
+  }
+  throw new Error('Timed out waiting for 3D generation');
+}
+
+async function pollForGLB(sessionHash) {
+  for (let i = 0; i < 40; i++) {
+    await sleep(2000);
+    const data = await proxyCall('poll', { sessionHash });
+    if (data.msg === 'process_completed') {
+      const output = data.output?.data;
+      if (Array.isArray(output)) {
+        for (const item of output) {
+          if (item?.url) return item.url;
+          if (item?.path) return `https://jeffreyxiang-trellis.hf.space/file=${item.path}`;
+          if (typeof item === 'string' && item.endsWith('.glb')) return `https://jeffreyxiang-trellis.hf.space/file=${item}`;
+        }
+      }
+      throw new Error('No GLB file in output: ' + JSON.stringify(output));
+    }
+  }
+  throw new Error('Timed out waiting for GLB extraction');
+}
+
+// ── THREE.JS VIEWER ───────────────────────────────────────
+let threeRenderer = null, threeScene = null, threeCamera = null, threeControls = null;
+
+function init3DViewer() {
+  const container = document.getElementById('viewerContainer');
+  const canvas    = document.getElementById('three-canvas');
+  const w = container.clientWidth, h = container.clientHeight;
+  threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  threeRenderer.setSize(w, h);
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  threeRenderer.outputEncoding = THREE.sRGBEncoding;
+  threeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  threeRenderer.toneMappingExposure = 1.2;
+  threeScene = new THREE.Scene();
+  threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
+  threeCamera.position.set(0, 1, 3);
+  threeScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const d1 = new THREE.DirectionalLight(0xffffff, 1.2); d1.position.set(5, 10, 5); threeScene.add(d1);
+  const d2 = new THREE.DirectionalLight(0x7b5cfa, 0.4); d2.position.set(-5, -5, -5); threeScene.add(d2);
+  threeControls = new THREE.OrbitControls(threeCamera, canvas);
+  threeControls.enableDamping = true;
+  threeControls.dampingFactor = 0.08;
+  threeControls.autoRotate = true;
+  threeControls.autoRotateSpeed = 1.5;
+  (function animate() {
+    requestAnimationFrame(animate);
+    threeControls.update();
+    threeRenderer.render(threeScene, threeCamera);
+  })();
+  window.addEventListener('resize', () => {
+    const w2 = container.clientWidth, h2 = container.clientHeight;
+    threeCamera.aspect = w2 / h2;
+    threeCamera.updateProjectionMatrix();
+    threeRenderer.setSize(w2, h2);
+  });
+}
+
+async function load3DModel(url) {
+  if (!threeRenderer) init3DViewer();
+  viewerPlaceholder.style.display = 'none';
+  threeScene.children.filter(c => c.userData.isModel).forEach(c => threeScene.remove(c));
+  return new Promise((resolve, reject) => {
+    new THREE.GLTFLoader().load(url, gltf => {
+      const model = gltf.scene;
+      model.userData.isModel = true;
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const scale = 2 / Math.max(size.x, size.y, size.z);
+      model.scale.setScalar(scale);
+      model.position.sub(center.multiplyScalar(scale));
+      threeScene.add(model);
+      threeCamera.position.set(0, 0.5, 3);
+      threeControls.target.set(0, 0, 0);
+      threeControls.update();
+      resolve();
+    }, undefined, reject);
+  });
+}
+
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+init3DViewer();
+</script>
+</body>
+</html>
