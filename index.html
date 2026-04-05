@@ -9,6 +9,11 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Official Gradio JS client -->
+  <script type="module">
+    import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+    window.GradioClient = Client;
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -28,20 +33,17 @@
     body::after {
       content: ''; position: fixed; top: -40%; left: 50%; transform: translateX(-50%);
       width: 800px; height: 600px;
-      background: radial-gradient(ellipse at center, rgba(123,92,250,0.12) 0%, transparent 70%);
+      background: radial-gradient(ellipse, rgba(123,92,250,0.12) 0%, transparent 70%);
       pointer-events: none; z-index: 0;
     }
     .wrapper { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
-    header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 20px 40px; border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(8px); background: rgba(6,6,8,0.7);
-      position: sticky; top: 0; z-index: 100;
-    }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); background: rgba(6,6,8,0.7); position: sticky; top: 0; z-index: 100; }
     .logo { font-family: var(--font-display); font-size: 28px; letter-spacing: 3px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .logo span { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--muted); -webkit-text-fill-color: var(--muted); display: block; margin-top: -4px; }
-    .header-badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; color: #00ffc8; border: 1px solid rgba(0,255,200,0.3); padding: 4px 12px; text-transform: uppercase; }
-    .free-badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; color: #ffd700; border: 1px solid rgba(255,215,0,0.3); padding: 4px 12px; text-transform: uppercase; }
+    .badges { display: flex; gap: 8px; }
+    .badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; padding: 4px 12px; text-transform: uppercase; border: 1px solid; }
+    .badge-green { color: var(--accent); border-color: rgba(0,255,200,0.3); }
+    .badge-gold { color: #ffd700; border-color: rgba(255,215,0,0.3); }
     .hero { text-align: center; padding: 60px 20px 32px; animation: fadeUp 0.8s ease both; }
     .hero-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 16px; opacity: 0.8; }
     .hero h1 { font-family: var(--font-display); font-size: clamp(56px, 10vw, 110px); line-height: 0.9; letter-spacing: 2px; background: linear-gradient(160deg, #ffffff 30%, #8888aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
@@ -63,13 +65,13 @@
     .upload-sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
     .image-preview { display: none; margin-top: 20px; position: relative; }
     .image-preview img { width: 100%; max-height: 240px; object-fit: contain; border: 1px solid var(--border); background: #0a0a0f; }
-    .image-preview .remove-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,69,102,0.85); border: none; color: white; width: 26px; height: 26px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    .remove-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,69,102,0.85); border: none; color: white; width: 26px; height: 26px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
     .convert-btn { width: 100%; margin-top: 24px; padding: 16px; background: linear-gradient(135deg, var(--accent2), var(--accent)); border: none; color: #000; font-family: var(--font-display); font-size: 20px; letter-spacing: 3px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
     .convert-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(123,92,250,0.4); }
     .convert-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-    .convert-btn .btn-shine { position: absolute; top: 0; left: -100%; width: 60%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent); transition: left 0.5s; }
+    .btn-shine { position: absolute; top: 0; left: -100%; width: 60%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent); transition: left 0.5s; }
     .convert-btn:hover .btn-shine { left: 150%; }
-    .status-log { margin-top: 16px; background: var(--surface); border: 1px solid var(--border); padding: 14px; font-family: var(--font-mono); font-size: 11px; min-height: 64px; max-height: 140px; overflow-y: auto; display: none; }
+    .status-log { margin-top: 16px; background: var(--surface); border: 1px solid var(--border); padding: 14px; font-family: var(--font-mono); font-size: 11px; min-height: 64px; max-height: 150px; overflow-y: auto; display: none; }
     .log-line { padding: 2px 0; display: flex; gap: 10px; }
     .log-time { color: var(--muted); flex-shrink: 0; }
     .log-msg { color: var(--accent); }
@@ -80,7 +82,7 @@
     .viewer-container { flex: 1; min-height: 360px; background: #08080d; border: 1px solid var(--border); position: relative; overflow: hidden; }
     #three-canvas { width: 100%; height: 100%; display: block; }
     .viewer-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
-    .viewer-placeholder .ph-icon { font-size: 48px; opacity: 0.2; }
+    .ph-icon { font-size: 48px; opacity: 0.2; }
     .viewer-placeholder p { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; opacity: 0.4; text-transform: uppercase; }
     .progress-wrap { margin-top: 16px; display: none; }
     .progress-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 6px; }
@@ -112,9 +114,9 @@
 <div class="wrapper">
   <header>
     <div class="logo">DEPTH.AI<span>IMAGE → 3D CONVERTER</span></div>
-    <div style="display:flex;gap:10px;align-items:center;">
-      <div class="free-badge">✦ 100% FREE</div>
-      <div class="header-badge">TRELLIS AI</div>
+    <div class="badges">
+      <div class="badge badge-gold">✦ 100% FREE</div>
+      <div class="badge badge-green">TRELLIS AI</div>
     </div>
   </header>
 
@@ -126,18 +128,17 @@
   </section>
 
   <div class="steps-row">
-    <div class="step"><div class="step-num">01</div><div class="step-title">Upload Image</div><div class="step-desc">Drop any PNG or JPG. Works best with a clear, isolated object.</div></div>
-    <div class="step"><div class="step-num">02</div><div class="step-title">Click Convert</div><div class="step-desc">No signup, no API key. Completely free forever.</div></div>
+    <div class="step"><div class="step-num">01</div><div class="step-title">Upload Image</div><div class="step-desc">Drop any PNG or JPG. Works best with a clear isolated object on plain background.</div></div>
+    <div class="step"><div class="step-num">02</div><div class="step-title">Click Convert</div><div class="step-desc">No signup, no API key, no credit card. Completely free.</div></div>
     <div class="step"><div class="step-num">03</div><div class="step-title">Wait ~60s</div><div class="step-desc">TRELLIS AI generates a textured 3D mesh from your image.</div></div>
-    <div class="step"><div class="step-num">04</div><div class="step-title">Download GLB</div><div class="step-desc">Preview in browser, then save your 3D file.</div></div>
+    <div class="step"><div class="step-num">04</div><div class="step-title">Download GLB</div><div class="step-desc">Preview in browser, rotate it, then save your 3D file.</div></div>
   </div>
 
   <div class="main-panel">
-    <!-- LEFT -->
     <div class="card">
       <div class="card-label">Input</div>
       <div class="upload-zone" id="uploadZone">
-        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/jpg,image/webp" />
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" />
         <div class="upload-icon">⬆</div>
         <div class="upload-title">Drop image here</div>
         <div class="upload-sub">PNG · JPG · WEBP — max 10MB</div>
@@ -152,7 +153,6 @@
       <div class="status-log" id="statusLog"></div>
     </div>
 
-    <!-- RIGHT -->
     <div class="card viewer-card">
       <div class="card-label">3D Preview</div>
       <div class="viewer-container" id="viewerContainer">
@@ -164,20 +164,28 @@
       </div>
       <div class="viewer-hint">DRAG TO ROTATE · SCROLL TO ZOOM · RIGHT-DRAG TO PAN</div>
       <div class="progress-wrap" id="progressWrap">
-        <div class="progress-label"><span id="progressText">Processing...</span><span id="progressPct">—</span></div>
-        <div class="progress-track"><div class="progress-fill indeterminate" id="progressFill"></div></div>
+        <div class="progress-label">
+          <span id="progressText">Processing...</span>
+          <span id="progressPct">—</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill indeterminate" id="progressFill"></div>
+        </div>
       </div>
       <a class="download-btn" id="downloadBtn" href="#" download="model.glb">↓ DOWNLOAD GLB</a>
     </div>
   </div>
 
-  <footer>DEPTH.AI · Powered by <a href="https://github.com/microsoft/TRELLIS" target="_blank">Microsoft TRELLIS</a> via <a href="https://huggingface.co/spaces/JeffreyXiang/TRELLIS" target="_blank">HuggingFace Spaces</a> · Completely free · No API key needed</footer>
+  <footer>
+    DEPTH.AI · Powered by <a href="https://github.com/microsoft/TRELLIS" target="_blank">Microsoft TRELLIS</a>
+    via <a href="https://huggingface.co/spaces/JeffreyXiang/TRELLIS" target="_blank">HuggingFace Spaces</a>
+    · 100% free · No API key needed
+  </footer>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-let selectedFile = null;
-
+// ── DOM ───────────────────────────────────────────────────
 const fileInput         = document.getElementById('fileInput');
 const uploadZone        = document.getElementById('uploadZone');
 const imagePreview      = document.getElementById('imagePreview');
@@ -193,12 +201,21 @@ const downloadBtn       = document.getElementById('downloadBtn');
 const viewerPlaceholder = document.getElementById('viewerPlaceholder');
 const toast             = document.getElementById('toast');
 
-// ── UPLOAD ───────────────────────────────────────────────
+let selectedFile = null;
+
+// ── UPLOAD HANDLERS ───────────────────────────────────────
 fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
-removeBtn.addEventListener('click', () => { selectedFile = null; fileInput.value = ''; imagePreview.style.display = 'none'; convertBtn.disabled = true; });
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+removeBtn.addEventListener('click', () => {
+  selectedFile = null; fileInput.value = '';
+  imagePreview.style.display = 'none';
+  convertBtn.disabled = true;
+});
 
 function handleFile(file) {
   if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10MB)', true); return; }
@@ -220,72 +237,83 @@ function log(msg, type = '') {
   statusLog.appendChild(line);
   statusLog.scrollTop = statusLog.scrollHeight;
 }
+
 function showToast(msg, isError = false) {
   toast.textContent = msg;
   toast.className = 'toast show' + (isError ? ' error' : '');
   setTimeout(() => { toast.className = 'toast'; }, 4500);
 }
 
-// ── PROXY CALL ────────────────────────────────────────────
-async function proxyCall(action, data) {
-  const resp = await fetch('/api/proxy', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, data })
-  });
-  const text = await resp.text();
-  try {
-    const json = JSON.parse(text);
-    if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
-    return json;
-  } catch(e) {
-    throw new Error(`Proxy error (${resp.status}): ${text.slice(0, 120)}`);
-  }
-}
-
-// ── CONVERT ──────────────────────────────────────────────
-// Polling happens in the browser (no Vercel timeout issue)
+// ── CONVERT (uses Gradio JS client) ──────────────────────
 convertBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
+
+  // Wait for Gradio client to load (it's a module import)
+  if (!window.GradioClient) {
+    showToast('Still loading, please wait a moment and try again', true);
+    return;
+  }
+
   convertBtn.disabled = true;
   convertBtn.innerHTML = '<span class="spinner"></span> PROCESSING...';
   downloadBtn.style.display = 'none';
   progressWrap.style.display = 'block';
   progressFill.className = 'progress-fill indeterminate';
   progressFill.style.background = '';
-  progressText.textContent = 'Uploading image...';
+  progressText.textContent = 'Connecting to HuggingFace...';
   progressPct.textContent = '—';
   statusLog.innerHTML = '';
 
   try {
-    log('Reading image...');
-    const base64 = await toBase64(selectedFile);
+    log('Connecting to TRELLIS on HuggingFace...');
+    const client = await window.GradioClient.connect("JeffreyXiang/TRELLIS");
+    log('Connected ✓');
 
-    log('Uploading to HuggingFace TRELLIS...');
-    const uploadResult = await proxyCall('upload', { imageBase64: base64, mimeType: selectedFile.type });
-    log('Image uploaded ✓');
+    log('Uploading image...');
+    progressText.textContent = 'Uploading image...';
 
-    log('Starting 3D generation...');
+    // Step 1: image_to_3d — pass the file directly
+    log('Starting 3D generation... (~60-90 seconds)', 'warn');
     progressText.textContent = 'Generating 3D mesh...';
-    const predictResult = await proxyCall('predict', { imagePath: uploadResult.path });
-    const sessionHash = predictResult.session_hash;
-    log('Session started: ' + sessionHash);
-    log('Polling for result... (browser polls every 4s, no timeout)', 'warn');
 
-    // POLL IN BROWSER — no server timeout
-    await pollUntilDone(sessionHash, 'Generating 3D mesh', 120, 4000);
-    log('3D generation complete!', 'success');
+    const result = await client.predict("/image_to_3d", {
+      image: selectedFile,
+      multiimages: [],
+      seed: 0,
+      randomize_seed: true,
+      ss_guidance_strength: 7.5,
+      ss_sampling_steps: 12,
+      slat_guidance_strength: 3,
+      slat_sampling_steps: 12,
+      multiimage_algo: "stochastic",
+    });
 
-    log('Requesting GLB extraction...');
+    log('3D generation complete ✓', 'success');
+    log('Extracting GLB file...');
     progressText.textContent = 'Extracting GLB...';
-    const extractResult = await proxyCall('extract', {});
-    const extractSession = extractResult.session_hash;
-    log('Extract session: ' + extractSession);
 
-    await sleep(2000);
-    const glbUrl = await pollForGLB(extractSession, 40, 3000);
+    // Step 2: extract the mesh as GLB
+    const glbResult = await client.predict("/extract_mesh", {
+      mesh_simplify: 0.95,
+      texture_size: 1024,
+    });
 
-    log('Loading model into viewer...', 'success');
+    log('Locating GLB file...');
+
+    // The output is an array; find the GLB file URL
+    let glbUrl = null;
+    const outputs = glbResult?.data || [];
+    for (const item of outputs) {
+      if (item?.url) { glbUrl = item.url; break; }
+      if (item?.path) { glbUrl = item.path; break; }
+      if (typeof item === 'string' && (item.includes('.glb') || item.includes('file='))) {
+        glbUrl = item; break;
+      }
+    }
+
+    if (!glbUrl) throw new Error('No GLB URL in response: ' + JSON.stringify(outputs).slice(0, 200));
+
+    log('Loading into 3D viewer...', 'success');
     progressText.textContent = 'Loading model...';
     progressFill.className = 'progress-fill';
     progressFill.style.width = '90%';
@@ -297,7 +325,7 @@ convertBtn.addEventListener('click', async () => {
     progressPct.textContent = '✓';
     downloadBtn.href = glbUrl;
     downloadBtn.style.display = 'block';
-    log('✓ 3D model ready! Download below.', 'success');
+    log('✓ 3D model ready! Click download below.', 'success');
     showToast('3D model generated — 100% free!');
 
   } catch (err) {
@@ -314,48 +342,12 @@ convertBtn.addEventListener('click', async () => {
   }
 });
 
-// Browser-side polling — Vercel function just does a quick single fetch each time
-async function pollUntilDone(sessionHash, label, maxTries, interval) {
-  for (let i = 0; i < maxTries; i++) {
-    await sleep(interval);
-    const data = await proxyCall('poll', { sessionHash });
-    const msg = data.msg || '';
-    if (msg === 'process_completed') return data;
-    if (msg === 'queue_full') throw new Error('HuggingFace queue is full — try again shortly');
-    if (msg === 'process_errored') throw new Error('Generation failed on HuggingFace');
-    if (i % 5 === 0) log(label + '... ' + Math.round(i * interval / 1000) + 's elapsed');
-  }
-  throw new Error('Timed out — HuggingFace may be busy, try again');
-}
-
-async function pollForGLB(sessionHash, maxTries, interval) {
-  for (let i = 0; i < maxTries; i++) {
-    await sleep(interval);
-    const data = await proxyCall('poll', { sessionHash });
-    if (data.msg === 'process_completed') {
-      const output = data.output?.data;
-      if (Array.isArray(output)) {
-        for (const item of output) {
-          if (item?.url) return item.url;
-          if (item?.path) return 'https://jeffreyxiang-trellis.hf.space/file=' + item.path;
-          if (typeof item === 'string' && (item.endsWith('.glb') || item.includes('/file='))) {
-            return item.startsWith('http') ? item : 'https://jeffreyxiang-trellis.hf.space/file=' + item;
-          }
-        }
-      }
-      throw new Error('No GLB in output: ' + JSON.stringify(output).slice(0, 200));
-    }
-    if (i % 4 === 0) log('Waiting for GLB... ' + Math.round(i * interval / 1000) + 's');
-  }
-  throw new Error('Timed out waiting for GLB file');
-}
-
 // ── THREE.JS VIEWER ───────────────────────────────────────
 let threeRenderer = null, threeScene = null, threeCamera = null, threeControls = null;
 
 function init3DViewer() {
   const container = document.getElementById('viewerContainer');
-  const canvas    = document.getElementById('three-canvas');
+  const canvas = document.getElementById('three-canvas');
   const w = container.clientWidth, h = container.clientHeight;
   threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   threeRenderer.setSize(w, h);
@@ -409,16 +401,6 @@ async function load3DModel(url) {
     }, undefined, reject);
   });
 }
-
-function toBase64(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(',')[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 init3DViewer();
 </script>
