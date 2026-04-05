@@ -244,6 +244,7 @@ async function proxyCall(action, data) {
 }
 
 // ── CONVERT ──────────────────────────────────────────────
+// Polling happens in the browser (no Vercel timeout issue)
 convertBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
   convertBtn.disabled = true;
@@ -257,42 +258,35 @@ convertBtn.addEventListener('click', async () => {
   statusLog.innerHTML = '';
 
   try {
-    // Step 1: Read image as base64
     log('Reading image...');
     const base64 = await toBase64(selectedFile);
 
-    // Step 2: Upload to HuggingFace
     log('Uploading to HuggingFace TRELLIS...');
-    const uploadResult = await proxyCall('upload', {
-      imageBase64: base64,
-      mimeType: selectedFile.type
-    });
-    log(`Image uploaded: ${uploadResult.path}`);
+    const uploadResult = await proxyCall('upload', { imageBase64: base64, mimeType: selectedFile.type });
+    log('Image uploaded ✓');
 
-    // Step 3: Start prediction
-    log('Starting 3D generation (FREE via TRELLIS)...');
+    log('Starting 3D generation...');
     progressText.textContent = 'Generating 3D mesh...';
-    const predictResult = await proxyCall('predict', {
-      imagePath: uploadResult.path
-    });
-    const sessionHash = predictResult.session_hash || predictResult.event_id;
-    log(`Session: ${sessionHash}`);
-    log('Waiting for result... (~60-120 seconds)', 'warn');
+    const predictResult = await proxyCall('predict', { imagePath: uploadResult.path });
+    const sessionHash = predictResult.session_hash;
+    log('Session started: ' + sessionHash);
+    log('Polling for result... (browser polls every 4s, no timeout)', 'warn');
 
-    // Step 4: Poll for completion
-    const modelReady = await pollForCompletion(sessionHash);
+    // POLL IN BROWSER — no server timeout
+    await pollUntilDone(sessionHash, 'Generating 3D mesh', 120, 4000);
     log('3D generation complete!', 'success');
 
-    // Step 5: Extract GLB
-    log('Extracting GLB file...');
+    log('Requesting GLB extraction...');
     progressText.textContent = 'Extracting GLB...';
-    const extractResult = await proxyCall('extract', { sessionHash });
-    log('GLB extraction started...');
-    const glbUrl = await pollForGLB(extractResult.session_hash || sessionHash);
+    const extractResult = await proxyCall('extract', {});
+    const extractSession = extractResult.session_hash;
+    log('Extract session: ' + extractSession);
 
-    // Step 6: Load into viewer
+    await sleep(2000);
+    const glbUrl = await pollForGLB(extractSession, 40, 3000);
+
     log('Loading model into viewer...', 'success');
-    progressText.textContent = 'Loading...';
+    progressText.textContent = 'Loading model...';
     progressFill.className = 'progress-fill';
     progressFill.style.width = '90%';
 
@@ -303,11 +297,11 @@ convertBtn.addEventListener('click', async () => {
     progressPct.textContent = '✓';
     downloadBtn.href = glbUrl;
     downloadBtn.style.display = 'block';
-    log('✓ 3D model ready!', 'success');
-    showToast('3D model generated successfully — for free!');
+    log('✓ 3D model ready! Download below.', 'success');
+    showToast('3D model generated — 100% free!');
 
   } catch (err) {
-    log(`Error: ${err.message}`, 'error');
+    log('Error: ' + err.message, 'error');
     showToast(err.message, true);
     progressText.textContent = 'Failed';
     progressFill.style.background = 'var(--danger)';
@@ -320,38 +314,40 @@ convertBtn.addEventListener('click', async () => {
   }
 });
 
-async function pollForCompletion(sessionHash) {
-  for (let i = 0; i < 80; i++) {
-    await sleep(3000);
-    try {
-      const data = await proxyCall('poll', { sessionHash });
-      if (data.msg === 'process_completed') return data;
-      if (data.msg === 'queue_full') throw new Error('HuggingFace queue is full, try again in a moment');
-      if (i % 5 === 0) log(`Still generating... (${Math.round(i * 3)}s)`);
-    } catch(e) {
-      if (e.message.includes('queue')) throw e;
-    }
+// Browser-side polling — Vercel function just does a quick single fetch each time
+async function pollUntilDone(sessionHash, label, maxTries, interval) {
+  for (let i = 0; i < maxTries; i++) {
+    await sleep(interval);
+    const data = await proxyCall('poll', { sessionHash });
+    const msg = data.msg || '';
+    if (msg === 'process_completed') return data;
+    if (msg === 'queue_full') throw new Error('HuggingFace queue is full — try again shortly');
+    if (msg === 'process_errored') throw new Error('Generation failed on HuggingFace');
+    if (i % 5 === 0) log(label + '... ' + Math.round(i * interval / 1000) + 's elapsed');
   }
-  throw new Error('Timed out waiting for 3D generation');
+  throw new Error('Timed out — HuggingFace may be busy, try again');
 }
 
-async function pollForGLB(sessionHash) {
-  for (let i = 0; i < 40; i++) {
-    await sleep(2000);
+async function pollForGLB(sessionHash, maxTries, interval) {
+  for (let i = 0; i < maxTries; i++) {
+    await sleep(interval);
     const data = await proxyCall('poll', { sessionHash });
     if (data.msg === 'process_completed') {
       const output = data.output?.data;
       if (Array.isArray(output)) {
         for (const item of output) {
           if (item?.url) return item.url;
-          if (item?.path) return `https://jeffreyxiang-trellis.hf.space/file=${item.path}`;
-          if (typeof item === 'string' && item.endsWith('.glb')) return `https://jeffreyxiang-trellis.hf.space/file=${item}`;
+          if (item?.path) return 'https://jeffreyxiang-trellis.hf.space/file=' + item.path;
+          if (typeof item === 'string' && (item.endsWith('.glb') || item.includes('/file='))) {
+            return item.startsWith('http') ? item : 'https://jeffreyxiang-trellis.hf.space/file=' + item;
+          }
         }
       }
-      throw new Error('No GLB file in output: ' + JSON.stringify(output));
+      throw new Error('No GLB in output: ' + JSON.stringify(output).slice(0, 200));
     }
+    if (i % 4 === 0) log('Waiting for GLB... ' + Math.round(i * interval / 1000) + 's');
   }
-  throw new Error('Timed out waiting for GLB extraction');
+  throw new Error('Timed out waiting for GLB file');
 }
 
 // ── THREE.JS VIEWER ───────────────────────────────────────
